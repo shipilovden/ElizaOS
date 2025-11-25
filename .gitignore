@@ -7,6 +7,7 @@ bun.lock
 .env.local
 .env.bak
 .env_main
+all_api_keys.txt
 
 .idea
 .zed
