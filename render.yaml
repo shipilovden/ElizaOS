@@ -1,0 +1,16 @@
+services:
+  - type: web
+    name: metasiberian-agent
+    env: node
+    buildCommand: cd metasiberian-agent && bun install && bun run build
+    startCommand: cd metasiberian-agent && bun run start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 3000
+      - key: SERVER_PORT
+        value: 3000
+      - key: OPENAI_API_KEY
+        sync: false  # Установите вручную в Dashboard
+
