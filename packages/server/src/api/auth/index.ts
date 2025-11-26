@@ -16,10 +16,12 @@ export function authRouter(): express.Router {
    */
   router.post('/telegram/login', async (req: express.Request, res: express.Response) => {
     try {
-      const botToken = process.env.TELEGRAM_BOT_TOKEN;
-      
+      // Prefer custom env var to avoid triggering core telegram plugin loading
+      const botToken =
+        process.env.AICHAT_TELEGRAM_BOT_TOKEN || process.env.TELEGRAM_BOT_TOKEN;
+
       if (!botToken) {
-        logger.error('[Auth] TELEGRAM_BOT_TOKEN not configured');
+        logger.error('[Auth] AICHAT_TELEGRAM_BOT_TOKEN / TELEGRAM_BOT_TOKEN not configured');
         return res.status(500).json({ 
           error: 'Telegram authentication not configured' 
         });
@@ -114,10 +116,12 @@ export function authRouter(): express.Router {
    */
   router.get('/telegram/callback', async (req: express.Request, res: express.Response) => {
     try {
-      const botToken = process.env.TELEGRAM_BOT_TOKEN;
-      
+      // Prefer custom env var to avoid triggering core telegram plugin loading
+      const botToken =
+        process.env.AICHAT_TELEGRAM_BOT_TOKEN || process.env.TELEGRAM_BOT_TOKEN;
+
       if (!botToken) {
-        logger.error('[Auth] TELEGRAM_BOT_TOKEN not configured');
+        logger.error('[Auth] AICHAT_TELEGRAM_BOT_TOKEN / TELEGRAM_BOT_TOKEN not configured');
         return res.status(500).send(`
           <html>
             <body>
