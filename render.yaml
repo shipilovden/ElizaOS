@@ -12,6 +12,17 @@ services:
       # Build client first to include latest changes
       # Client is in ../packages/client relative to metasiberian-agent
       if [ -d "../packages/client" ]; then
+        echo "Building client dependencies first..."
+        # Build core package (required by client)
+        if [ -d "../packages/core" ]; then
+          echo "Building @elizaos/core..."
+          cd ../packages/core && bun run build && cd ../../metasiberian-agent
+        fi
+        # Build api-client package (required by client)
+        if [ -d "../packages/api-client" ]; then
+          echo "Building @elizaos/api-client..."
+          cd ../packages/api-client && bun run build && cd ../../metasiberian-agent
+        fi
         echo "Building client..."
         # Install client dependencies first
         cd ../packages/client && bun install && cd ../../metasiberian-agent
