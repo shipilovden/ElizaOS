@@ -9,36 +9,30 @@ services:
       export PATH="$HOME/.bun/bin:$PATH"
       bun --version
       bun install
-      # Build client first to include latest changes
-      # Client is in ../packages/client relative to metasiberian-agent
-      if [ -d "../packages/client" ]; then
+      # Build client using script
+      if [ -f "build-client.sh" ]; then
+        chmod +x build-client.sh
+        ./build-client.sh
+      elif [ -d "../packages/client" ]; then
         echo "Building client dependencies first..."
-        # Build core package (required by client)
         if [ -d "../packages/core" ]; then
           echo "Building @elizaos/core..."
           cd ../packages/core && bun run build && cd ../../metasiberian-agent
         fi
-        # Build api-client package (required by client)
         if [ -d "../packages/api-client" ]; then
           echo "Building @elizaos/api-client..."
           cd ../packages/api-client && bun run build && cd ../../metasiberian-agent
         fi
         echo "Building client..."
-        # Install client dependencies first
         cd ../packages/client && bun install && cd ../../metasiberian-agent
-        # Build client using vite directly (skip type checking for faster build)
         cd ../packages/client && bunx vite build && cd ../../metasiberian-agent
-        # Server uses client from node_modules/@elizaos/server/dist/client
-        # Copy built client there so server can use updated version
         if [ -d "../packages/client/dist" ] && [ -d "node_modules/@elizaos/server" ]; then
           echo "Copying client dist to server node_modules..."
           mkdir -p node_modules/@elizaos/server/dist/client
           rm -rf node_modules/@elizaos/server/dist/client/*
           cp -r ../packages/client/dist/* node_modules/@elizaos/server/dist/client/
-          # Verify the copy worked
           if [ -f "node_modules/@elizaos/server/dist/client/index.html" ]; then
             echo "✓ Client copied to server successfully"
-            # Verify title is correct
             if grep -q "AiChat - Client" node_modules/@elizaos/server/dist/client/index.html; then
               echo "✓ Title is correct: AiChat - Client"
             else
@@ -51,8 +45,6 @@ services:
         else
           echo "⚠ Warning: Client dist or node_modules/@elizaos/server not found"
         fi
-      else
-        echo "⚠ Warning: ../packages/client directory not found"
       fi
       bun run build
     startCommand: |
