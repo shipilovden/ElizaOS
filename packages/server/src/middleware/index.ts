@@ -6,6 +6,9 @@
 // Authentication middleware
 export { apiKeyAuthMiddleware } from './auth';
 
+// Session middleware
+export { sessionMiddleware, createSession, getSessionUser, deleteSession } from './session';
+
 // Security middleware
 export { securityMiddleware } from './security';
 

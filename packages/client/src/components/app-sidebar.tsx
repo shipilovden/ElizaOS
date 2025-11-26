@@ -1,5 +1,6 @@
 import ConfirmationDialog from '@/components/confirmation-dialog';
 import ConnectionStatus from '@/components/connection-status';
+import UserAuthStatus from '@/components/user-auth-status';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import {
@@ -646,6 +647,7 @@ export function AppSidebar({
             <FooterLink to="/logs" Icon={TerminalIcon} label="Logs" />
             <FooterLink to="/settings" Icon={Cog} label="Settings" />
             <ConnectionStatus />
+            <UserAuthStatus />
           </SidebarMenu>
         </SidebarFooter>
       </Sidebar>
