@@ -12,7 +12,13 @@ services:
       # Build client first to include latest changes
       # Client is in ../packages/client relative to metasiberian-agent
       if [ -d "../packages/client" ]; then
+        echo "Building client..."
         cd ../packages/client && bun run build && cd ../../metasiberian-agent
+        # Copy built client to node_modules so server can use it
+        if [ -d "../packages/client/dist" ] && [ -d "node_modules/@elizaos/client" ]; then
+          echo "Copying client dist to node_modules..."
+          cp -r ../packages/client/dist node_modules/@elizaos/client/
+        fi
       fi
       bun run build
     startCommand: |
