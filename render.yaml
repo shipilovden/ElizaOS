@@ -17,8 +17,26 @@ services:
         # Copy built client to node_modules so server can use it
         if [ -d "../packages/client/dist" ] && [ -d "node_modules/@elizaos/client" ]; then
           echo "Copying client dist to node_modules..."
+          rm -rf node_modules/@elizaos/client/dist
           cp -r ../packages/client/dist node_modules/@elizaos/client/
+          # Verify the copy worked
+          if [ -f "node_modules/@elizaos/client/dist/index.html" ]; then
+            echo "✓ Client copied successfully"
+            # Verify title is correct
+            if grep -q "AiChat - Client" node_modules/@elizaos/client/dist/index.html; then
+              echo "✓ Title is correct: AiChat - Client"
+            else
+              echo "⚠ Warning: Title may not be correct"
+              cat node_modules/@elizaos/client/dist/index.html | grep -i title
+            fi
+          else
+            echo "✗ Error: Client copy failed"
+          fi
+        else
+          echo "⚠ Warning: Client dist or node_modules/@elizaos/client not found"
         fi
+      else
+        echo "⚠ Warning: ../packages/client directory not found"
       fi
       bun run build
     startCommand: |
