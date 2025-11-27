@@ -247,6 +247,8 @@ export default function TelegramAuthModal() {
                 size="lg"
                 className="w-full bg-[#0088cc] hover:bg-[#0077b3] text-white"
                 onClick={() => {
+                  clientLogger.info('Login button clicked', { botUsername, widgetReady });
+                  
                   // Try to click widget if it exists
                   const container = widgetContainerRef.current;
                   if (container) {
@@ -254,18 +256,43 @@ export default function TelegramAuthModal() {
                     const link = container.querySelector('a');
                     const button = container.querySelector('button');
                     
-                    if (iframe) {
-                      // Widget loaded, try to trigger it
-                      (iframe as HTMLIFrameElement).contentWindow?.postMessage('click', '*');
-                    } else if (link) {
+                    clientLogger.info('Widget elements found', { hasIframe: !!iframe, hasLink: !!link, hasButton: !!button });
+                    
+                    if (link) {
+                      // Widget created a link, click it
+                      clientLogger.info('Clicking widget link');
                       (link as HTMLAnchorElement).click();
+                      return;
                     } else if (button) {
+                      // Widget created a button, click it
+                      clientLogger.info('Clicking widget button');
                       (button as HTMLButtonElement).click();
-                    } else {
-                      // Widget not loaded, show message
-                      setError('Telegram widget is still loading. Please wait a moment and try again.');
+                      return;
+                    } else if (iframe) {
+                      // Widget loaded as iframe, try to interact with it
+                      clientLogger.info('Widget is iframe, trying to trigger');
+                      try {
+                        // Try to find and click the button inside iframe
+                        const iframeDoc = (iframe as HTMLIFrameElement).contentDocument || 
+                                         (iframe as HTMLIFrameElement).contentWindow?.document;
+                        if (iframeDoc) {
+                          const iframeButton = iframeDoc.querySelector('button, a');
+                          if (iframeButton) {
+                            (iframeButton as HTMLElement).click();
+                            return;
+                          }
+                        }
+                      } catch (e) {
+                        clientLogger.warn('Cannot access iframe content (CORS)', e);
+                      }
                     }
                   }
+                  
+                  // Widget not loaded or not accessible, open Telegram OAuth manually
+                  // This is a fallback - Telegram Login Widget should handle this, but if it doesn't work,
+                  // we can't manually open OAuth because we need bot_id (numeric), not username
+                  clientLogger.warn('Widget not accessible, showing error');
+                  setError('Telegram widget is not ready. Please wait a moment and try again, or refresh the page.');
                 }}
               >
                 <LogIn className="h-4 w-4 mr-2" />
