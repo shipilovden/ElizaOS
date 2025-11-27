@@ -25,10 +25,24 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [telegramUser, setTelegramUser] = useState<TelegramUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
+  // Define checkAuth first, before using it in useEffect
+  const checkAuth = useCallback(async () => {
+    try {
+      setIsLoading(true);
+      const user = await getCurrentUser();
+      setTelegramUser(user);
+    } catch (error) {
+      clientLogger.error('Auth check error:', error);
+      setTelegramUser(null);
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
   // Check authentication on mount
   useEffect(() => {
     checkAuth();
-  }, []);
+  }, [checkAuth]);
 
   // Also check auth when window receives focus (user might have completed auth in popup)
   useEffect(() => {
@@ -42,19 +56,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     window.addEventListener('focus', handleFocus);
     return () => window.removeEventListener('focus', handleFocus);
   }, [checkAuth]);
-
-  const checkAuth = useCallback(async () => {
-    try {
-      setIsLoading(true);
-      const user = await getCurrentUser();
-      setTelegramUser(user);
-    } catch (error) {
-      clientLogger.error('Auth check error:', error);
-      setTelegramUser(null);
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
 
   const openApiKeyDialog = useCallback(() => {
     setIsApiKeyDialogOpen(true);
