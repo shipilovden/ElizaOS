@@ -26,9 +26,11 @@ export default function TelegramAuthModal() {
   const [showFallback, setShowFallback] = useState(false);
   const [isProcessingAuth, setIsProcessingAuth] = useState(false);
 
-  // Modal should be open if not authenticated and not loading
-  // Also keep open while processing authentication to prevent premature closing
-  const isOpen = !isLoading && !isAuthenticated && !isProcessingAuth;
+  // Modal should be open if:
+  // 1. Not loading
+  // 2. Not authenticated OR currently processing authentication
+  // This ensures modal stays open during OAuth flow
+  const isOpen = !isLoading && (!isAuthenticated || isProcessingAuth);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -396,6 +398,16 @@ export default function TelegramAuthModal() {
                     
                     // Focus popup
                     popup.focus();
+                    
+                    // Check if popup was immediately closed (blocked by browser)
+                    setTimeout(() => {
+                      if (popup.closed) {
+                        clientLogger.warn('OAuth popup was closed immediately - likely blocked by browser');
+                        setError('Popup was blocked. Please allow popups for this site and try again.');
+                        setIsProcessingAuth(false);
+                        return;
+                      }
+                    }, 500);
                     
                     // Listen for popup to close (user completed auth)
                     const checkPopup = setInterval(() => {
