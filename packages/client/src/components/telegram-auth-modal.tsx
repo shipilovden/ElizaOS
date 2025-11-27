@@ -66,11 +66,18 @@ export default function TelegramAuthModal() {
 
     // Handle message from callback window
     const handleMessage = async (event: MessageEvent) => {
-      clientLogger.info('Message received in modal', { 
-        origin: event.origin, 
-        expectedOrigin: window.location.origin,
-        data: event.data 
-      });
+      // Filter out noise messages (setImmediate, etc.)
+      if (event.data && typeof event.data === 'object' && 'type' in event.data) {
+        clientLogger.info('Message received in modal', { 
+          origin: event.origin, 
+          expectedOrigin: window.location.origin,
+          type: event.data.type,
+          hasUser: !!event.data.user
+        });
+      } else {
+        // Ignore non-auth messages
+        return;
+      }
       
       // Verify origin for security
       if (event.origin !== window.location.origin) {

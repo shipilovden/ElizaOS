@@ -261,10 +261,17 @@ export function authRouter(): express.Router {
                   console.error('Error storing in localStorage:', e);
                 }
                 
-                // Close window after a delay
+                // Close window after a delay (only if opened as popup)
+                // Give time for postMessage to be received
                 setTimeout(function() {
-                  window.close();
-                }, 2000);
+                  // Only close if we have an opener (popup window)
+                  if (window.opener && !window.opener.closed) {
+                    window.close();
+                  } else {
+                    // If no opener, redirect to main page
+                    window.location.href = window.location.origin;
+                  }
+                }, 3000);
               })();
             </script>
           </body>
