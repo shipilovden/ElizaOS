@@ -5,7 +5,6 @@ import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar';
 import { Button } from './ui/button';
 import { LogOut, User } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import TelegramLoginWidget from './telegram-login-widget';
 
 export default function UserAuthStatus() {
   const { telegramUser, isAuthenticated, logout, isLoading } = useAuth();
@@ -76,18 +75,15 @@ export default function UserAuthStatus() {
     );
   }
 
-  // Not authenticated - show login widget
+  // Not authenticated - just show status (modal will handle login)
   return (
     <SidebarMenuItem>
-      <div className="flex flex-col gap-2 w-full">
-        <SidebarMenuButton className="rounded cursor-default">
-          <div className="flex items-center gap-2">
-            <User className="h-4 w-4 text-muted-foreground" />
-            <span className="text-xs text-muted-foreground">Not logged in</span>
-          </div>
-        </SidebarMenuButton>
-        <TelegramLoginWidget />
-      </div>
+      <SidebarMenuButton className="rounded cursor-default">
+        <div className="flex items-center gap-2">
+          <User className="h-4 w-4 text-muted-foreground" />
+          <span className="text-xs text-muted-foreground">Not logged in</span>
+        </div>
+      </SidebarMenuButton>
     </SidebarMenuItem>
   );
 }

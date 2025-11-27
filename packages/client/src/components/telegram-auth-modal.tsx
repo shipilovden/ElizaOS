@@ -1,29 +1,39 @@
 import { useEffect, useRef, useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import clientLogger from '@/lib/logger';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from './ui/dialog';
 import { Button } from './ui/button';
 import { LogIn } from 'lucide-react';
 
 /**
- * Telegram Login Widget Component
+ * Telegram Authentication Modal
  * 
- * This component integrates the Telegram Login Widget script
- * and handles the authentication callback
+ * Shows a modal dialog requiring Telegram authentication before accessing the site
  */
-export default function TelegramLoginWidget() {
-  const { setUser } = useAuth();
+export default function TelegramAuthModal() {
+  const { isAuthenticated, isLoading, setUser } = useAuth();
   const widgetContainerRef = useRef<HTMLDivElement>(null);
   const scriptLoadedRef = useRef(false);
-  const [showFallback, setShowFallback] = useState(false);
   const [botUsername, setBotUsername] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  // Modal should be open if not authenticated and not loading
+  const isOpen = !isLoading && !isAuthenticated;
 
   useEffect(() => {
+    if (!isOpen) return;
+
     // Get bot username from environment
     const username = import.meta.env.VITE_TELEGRAM_BOT_USERNAME;
     
     if (!username || username === 'your_bot_username') {
-      clientLogger.warn('VITE_TELEGRAM_BOT_USERNAME not configured, showing fallback button');
-      setShowFallback(true);
+      setError('Telegram authentication is not configured. Please contact the administrator.');
       return;
     }
     
@@ -44,12 +54,14 @@ export default function TelegramLoginWidget() {
           
           // Update auth context directly with user and session
           setUser(user, sessionId);
+          setError(null);
         } catch (error) {
           clientLogger.error('Telegram login error:', error);
+          setError('Authentication failed. Please try again.');
         }
       } else if (event.data?.error) {
         clientLogger.error('Telegram auth error:', event.data.error);
-        alert('Login failed: ' + event.data.error);
+        setError('Authentication failed: ' + event.data.error);
       }
     };
 
@@ -68,7 +80,7 @@ export default function TelegramLoginWidget() {
         };
         script.onerror = () => {
           clientLogger.error('Failed to load Telegram widget script');
-          setShowFallback(true);
+          setError('Failed to load Telegram authentication. Please refresh the page.');
         };
         document.body.appendChild(script);
       }
@@ -88,14 +100,14 @@ export default function TelegramLoginWidget() {
           widgetScript.async = true;
           widgetScript.src = 'https://telegram.org/js/telegram-widget.js?22';
           widgetScript.setAttribute('data-telegram-login', botUsername);
-          widgetScript.setAttribute('data-size', 'medium');
+          widgetScript.setAttribute('data-size', 'large');
           widgetScript.setAttribute('data-auth-url', authUrl);
           widgetScript.setAttribute('data-request-access', 'write');
           widgetScript.setAttribute('data-userpic', 'true');
           
           widgetScript.onerror = () => {
             clientLogger.error('Failed to create Telegram widget');
-            setShowFallback(true);
+            setError('Failed to initialize Telegram authentication. Please refresh the page.');
           };
           
           container.appendChild(widgetScript);
@@ -103,10 +115,10 @@ export default function TelegramLoginWidget() {
           // Check if widget was created after a delay
           setTimeout(() => {
             if (!container.querySelector('iframe') && !container.querySelector('a')) {
-              clientLogger.warn('Telegram widget did not render, showing fallback');
-              setShowFallback(true);
+              clientLogger.warn('Telegram widget did not render');
+              setError('Telegram authentication widget failed to load. Please refresh the page.');
             }
-          }, 2000);
+          }, 3000);
         }
       };
 
@@ -122,11 +134,11 @@ export default function TelegramLoginWidget() {
             }
           }, 100);
           
-          // Cleanup after 5 seconds and show fallback
+          // Cleanup after 5 seconds
           setTimeout(() => {
             clearInterval(checkScript);
             if (!container.querySelector('iframe') && !container.querySelector('a')) {
-              setShowFallback(true);
+              setError('Telegram authentication widget failed to load. Please refresh the page.');
             }
           }, 5000);
         }
@@ -138,31 +150,52 @@ export default function TelegramLoginWidget() {
     return () => {
       window.removeEventListener('message', handleMessage);
     };
-  }, [setUser, botUsername]);
-
-  // Fallback button if widget doesn't load or bot username not configured
-  if (showFallback || !botUsername) {
-    return (
-      <Button
-        variant="outline"
-        size="sm"
-        className="w-full text-xs"
-        onClick={() => {
-          alert('Telegram login is not configured. Please set VITE_TELEGRAM_BOT_USERNAME environment variable.');
-        }}
-      >
-        <LogIn className="h-3 w-3 mr-2" />
-        Login with Telegram
-      </Button>
-    );
-  }
+  }, [isOpen, botUsername, setUser]);
 
   return (
-    <div 
-      ref={widgetContainerRef} 
-      className="telegram-login-container flex justify-center w-full"
-      style={{ minHeight: '40px' }}
-    />
+    <Dialog open={isOpen} modal={true}>
+      <DialogContent 
+        className="sm:max-w-md z-[100]"
+        onInteractOutside={(e) => e.preventDefault()}
+        onEscapeKeyDown={(e) => e.preventDefault()}
+      >
+        <DialogHeader>
+          <DialogTitle>Authentication Required</DialogTitle>
+          <DialogDescription>
+            Please sign in with Telegram to access this application.
+          </DialogDescription>
+        </DialogHeader>
+        
+        <div className="flex flex-col items-center gap-4 py-4">
+          {error ? (
+            <div className="w-full p-3 bg-destructive/10 border border-destructive/20 rounded-md">
+              <p className="text-sm text-destructive text-center">{error}</p>
+              <Button
+                variant="outline"
+                size="sm"
+                className="w-full mt-2"
+                onClick={() => window.location.reload()}
+              >
+                Refresh Page
+              </Button>
+            </div>
+          ) : (
+            <>
+              <div 
+                ref={widgetContainerRef} 
+                className="telegram-login-container flex justify-center w-full"
+                style={{ minHeight: '60px' }}
+              />
+              {!botUsername && (
+                <p className="text-sm text-muted-foreground text-center">
+                  Loading authentication...
+                </p>
+              )}
+            </>
+          )}
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 

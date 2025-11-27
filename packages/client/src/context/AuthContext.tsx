@@ -1,6 +1,7 @@
 import { createContext, useState, useContext, ReactNode, useCallback, useEffect } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { ApiKeyDialog } from '@/components/api-key-dialog';
+import TelegramAuthModal from '@/components/telegram-auth-modal';
 import clientLogger from '@/lib/logger';
 import type { TelegramUser } from '@/types/telegram';
 import { getCurrentUser, loginWithTelegram, logout as logoutApi, clearSessionId, setUserDirectly } from '@/lib/telegram-auth';
@@ -100,6 +101,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         onOpenChange={setIsApiKeyDialogOpen}
         onApiKeySaved={handleApiKeySaved}
       />
+      <TelegramAuthModal />
     </AuthContext.Provider>
   );
 };
