@@ -118,13 +118,18 @@ export default function TelegramAuthModal() {
       container.innerHTML = '';
       
       // Wait for script to load, then create widget
+      // According to Telegram docs: https://core.telegram.org/widgets/login
+      // Widget should be created as a script tag with data attributes
       const createWidget = () => {
         if (!container.querySelector('script[data-telegram-login]')) {
           clientLogger.info('Creating Telegram widget', { botUsername, authUrl });
           
+          // Create script tag exactly as per Telegram documentation
           const widgetScript = document.createElement('script');
           widgetScript.async = true;
           widgetScript.src = 'https://telegram.org/js/telegram-widget.js?22';
+          
+          // Set attributes as per Telegram docs
           widgetScript.setAttribute('data-telegram-login', botUsername);
           widgetScript.setAttribute('data-size', 'large');
           widgetScript.setAttribute('data-auth-url', authUrl);
@@ -133,17 +138,37 @@ export default function TelegramAuthModal() {
           
           widgetScript.onload = () => {
             clientLogger.info('Telegram widget script loaded successfully');
+            // Widget script should automatically create iframe/button
+            // Give it a moment to render
+            setTimeout(() => {
+              const iframe = container.querySelector('iframe');
+              const link = container.querySelector('a');
+              const button = container.querySelector('button');
+              clientLogger.info('Widget elements after load', { 
+                hasIframe: !!iframe, 
+                hasLink: !!link, 
+                hasButton: !!button 
+              });
+            }, 1000);
           };
           
           widgetScript.onerror = (error) => {
-            clientLogger.error('Failed to create Telegram widget', error);
-            setError('Failed to initialize Telegram authentication. Please refresh the page.');
+            clientLogger.error('Failed to load Telegram widget script', error);
+            setError('Failed to load Telegram authentication script. Please check your internet connection and try again.');
             setShowFallback(true);
           };
           
           container.appendChild(widgetScript);
           
-          clientLogger.info('Telegram widget script appended to container');
+          clientLogger.info('Telegram widget script appended to container', {
+            containerId: container.id,
+            scriptSrc: widgetScript.src,
+            attributes: {
+              'data-telegram-login': botUsername,
+              'data-size': 'large',
+              'data-auth-url': authUrl,
+            }
+          });
           
           // Check if widget was created after a delay
           const checkWidget = setInterval(() => {
@@ -288,11 +313,22 @@ export default function TelegramAuthModal() {
                     }
                   }
                   
-                  // Widget not loaded or not accessible, open Telegram OAuth manually
-                  // This is a fallback - Telegram Login Widget should handle this, but if it doesn't work,
-                  // we can't manually open OAuth because we need bot_id (numeric), not username
-                  clientLogger.warn('Widget not accessible, showing error');
-                  setError('Telegram widget is not ready. Please wait a moment and try again, or refresh the page.');
+                  // Widget not loaded or not accessible
+                  // Check if we have bot_id (numeric) to open OAuth manually
+                  const isNumericBotId = /^\d+$/.test(botUsername);
+                  
+                  if (isNumericBotId) {
+                    // We have numeric bot_id, can open OAuth directly
+                    const authUrl = `${window.location.origin.replace(/\/$/, '')}/api/auth/telegram/callback`;
+                    const oauthUrl = `https://oauth.telegram.org/auth?bot_id=${botUsername}&origin=${encodeURIComponent(window.location.origin)}&request_access=write&return_to=${encodeURIComponent(authUrl)}`;
+                    
+                    clientLogger.info('Opening Telegram OAuth manually', { oauthUrl });
+                    window.open(oauthUrl, '_blank', 'width=500,height=600');
+                  } else {
+                    // Only username, can't open OAuth manually
+                    clientLogger.warn('Widget not accessible and no bot_id available', { botUsername });
+                    setError('Telegram widget is not ready. Please wait a moment and try again, or refresh the page. If the problem persists, please set VITE_TELEGRAM_BOT_ID (numeric) instead of VITE_TELEGRAM_BOT_USERNAME.');
+                  }
                 }}
               >
                 <LogIn className="h-4 w-4 mr-2" />
