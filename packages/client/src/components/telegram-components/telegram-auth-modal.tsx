@@ -226,7 +226,7 @@ export default function TelegramAuthModal() {
         // This will show the button with user's name
         setIsProcessingAuth(false);
         clientLogger.info('User authorized, recreating widget to show button with name');
-        
+
         // Recreate widget - it will now show button with user name
         setTimeout(() => {
           const container = widgetContainerRef.current;
