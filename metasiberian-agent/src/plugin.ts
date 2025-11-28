@@ -15,7 +15,6 @@ import {
   logger,
 } from '@elizaos/core';
 import { z } from 'zod';
-import { getSessionByTelegramId } from '../../packages/server/src/middleware/session';
 
 /**
  * Define the configuration schema for the plugin with the following properties:
@@ -284,19 +283,45 @@ const plugin: Plugin = {
             
             logger.info(`[Telegram /me] Processing /me command for Telegram ID: ${telegramId}`);
             
-            // Get user info from session
-            const sessionUser = getSessionByTelegramId(Number(telegramId));
+            // Get user info from API endpoint
+            // Try to get base URL from environment or use default
+            const baseUrl = process.env.ELIZA_SERVER_URL || process.env.SERVER_URL || 'http://localhost:3000';
+            const apiUrl = `${baseUrl}/api/auth/telegram/bot/user-info?telegramId=${telegramId}`;
             
-            if (!sessionUser) {
-              logger.info(`[Telegram /me] User ${telegramId} not found in sessions`);
-              // Send message that user needs to login on website
+            let sessionUser: any = null;
+            try {
+              const response = await fetch(apiUrl);
+              if (response.ok) {
+                const data = await response.json();
+                sessionUser = data;
+              } else if (response.status === 404) {
+                logger.info(`[Telegram /me] User ${telegramId} not found in sessions`);
+                // Send message that user needs to login on website
+                if (runtime && message?.roomId) {
+                  await runtime.messageService.handleMessage(
+                    runtime,
+                    {
+                      ...message,
+                      content: {
+                        text: '❌ Вы не авторизованы на сайте. Пожалуйста, авторизуйтесь на сайте через Telegram, а затем попробуйте снова.',
+                        source: message.content.source || 'telegram',
+                      },
+                    },
+                    async () => {}
+                  );
+                }
+                return;
+              }
+            } catch (error) {
+              logger.error(`[Telegram /me] Error fetching user info: ${error}`);
+              // Send error message
               if (runtime && message?.roomId) {
                 await runtime.messageService.handleMessage(
                   runtime,
                   {
                     ...message,
                     content: {
-                      text: '❌ Вы не авторизованы на сайте. Пожалуйста, авторизуйтесь на сайте через Telegram, а затем попробуйте снова.',
+                      text: '❌ Ошибка при получении информации. Попробуйте позже.',
                       source: message.content.source || 'telegram',
                     },
                   },
@@ -306,15 +331,22 @@ const plugin: Plugin = {
               return;
             }
             
+            if (!sessionUser || !sessionUser.user) {
+              logger.warn(`[Telegram /me] Invalid response for user ${telegramId}`);
+              return;
+            }
+            
+            const user = sessionUser.user;
+            
             // Format user info message
             const userInfo = [
               '👤 **Ваш профиль:**',
               '',
-              `**Имя:** ${sessionUser.firstName}${sessionUser.lastName ? ' ' + sessionUser.lastName : ''}`,
-              sessionUser.username ? `**Username:** @${sessionUser.username}` : '',
-              `**Telegram ID:** ${sessionUser.telegramId}`,
-              `**Сессия создана:** ${new Date(sessionUser.createdAt).toLocaleString('ru-RU')}`,
-              `**Последняя активность:** ${new Date(sessionUser.lastActivity).toLocaleString('ru-RU')}`,
+              `**Имя:** ${user.firstName}${user.lastName ? ' ' + user.lastName : ''}`,
+              user.username ? `**Username:** @${user.username}` : '',
+              `**Telegram ID:** ${user.id}`,
+              sessionUser.createdAt ? `**Сессия создана:** ${new Date(sessionUser.createdAt).toLocaleString('ru-RU')}` : '',
+              sessionUser.lastActivity ? `**Последняя активность:** ${new Date(sessionUser.lastActivity).toLocaleString('ru-RU')}` : '',
             ].filter(Boolean).join('\n');
             
             logger.info(`[Telegram /me] Sending user info for ${telegramId}`);
