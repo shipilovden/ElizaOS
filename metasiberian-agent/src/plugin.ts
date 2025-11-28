@@ -15,6 +15,7 @@ import {
   logger,
 } from '@elizaos/core';
 import { z } from 'zod';
+import { getSessionByTelegramId } from '../../packages/server/src/middleware/session';
 
 /**
  * Define the configuration schema for the plugin with the following properties:
@@ -247,10 +248,95 @@ const plugin: Plugin = {
   ],
   events: {
     MESSAGE_RECEIVED: [
-      async (params) => {
-        logger.info('MESSAGE_RECEIVED event received');
-        // print the keys
-        logger.info({ keys: Object.keys(params) }, 'MESSAGE_RECEIVED param keys');
+      async (params: any) => {
+        const { message, runtime } = params;
+        
+        // Check if message is a /me command
+        const messageText = message?.content?.text?.trim();
+        if (messageText === '/me' || messageText?.startsWith('/me ')) {
+          try {
+            // Get Telegram ID from message metadata
+            // Telegram plugin usually stores user info in metadata.raw or metadata.sourceId
+            const telegramId = 
+              message?.metadata?.raw?.from?.id ||
+              message?.metadata?.raw?.user?.id ||
+              message?.metadata?.sourceId ||
+              message?.metadata?.raw?.userId;
+            
+            if (!telegramId) {
+              logger.warn('[Telegram /me] Could not find Telegram ID in message metadata');
+              // Try to send error message back
+              if (runtime && message?.roomId) {
+                await runtime.messageService.handleMessage(
+                  runtime,
+                  {
+                    ...message,
+                    content: {
+                      text: '❌ Не удалось определить ваш Telegram ID. Пожалуйста, сначала авторизуйтесь на сайте.',
+                      source: message.content.source || 'telegram',
+                    },
+                  },
+                  async () => {}
+                );
+              }
+              return;
+            }
+            
+            logger.info(`[Telegram /me] Processing /me command for Telegram ID: ${telegramId}`);
+            
+            // Get user info from session
+            const sessionUser = getSessionByTelegramId(Number(telegramId));
+            
+            if (!sessionUser) {
+              logger.info(`[Telegram /me] User ${telegramId} not found in sessions`);
+              // Send message that user needs to login on website
+              if (runtime && message?.roomId) {
+                await runtime.messageService.handleMessage(
+                  runtime,
+                  {
+                    ...message,
+                    content: {
+                      text: '❌ Вы не авторизованы на сайте. Пожалуйста, авторизуйтесь на сайте через Telegram, а затем попробуйте снова.',
+                      source: message.content.source || 'telegram',
+                    },
+                  },
+                  async () => {}
+                );
+              }
+              return;
+            }
+            
+            // Format user info message
+            const userInfo = [
+              '👤 **Ваш профиль:**',
+              '',
+              `**Имя:** ${sessionUser.firstName}${sessionUser.lastName ? ' ' + sessionUser.lastName : ''}`,
+              sessionUser.username ? `**Username:** @${sessionUser.username}` : '',
+              `**Telegram ID:** ${sessionUser.telegramId}`,
+              `**Сессия создана:** ${new Date(sessionUser.createdAt).toLocaleString('ru-RU')}`,
+              `**Последняя активность:** ${new Date(sessionUser.lastActivity).toLocaleString('ru-RU')}`,
+            ].filter(Boolean).join('\n');
+            
+            logger.info(`[Telegram /me] Sending user info for ${telegramId}`);
+            
+            // Send response back to user
+            if (runtime && message?.roomId) {
+              await runtime.messageService.handleMessage(
+                runtime,
+                {
+                  ...message,
+                  content: {
+                    text: userInfo,
+                    source: message.content.source || 'telegram',
+                  },
+                },
+                async () => {}
+              );
+            }
+          } catch (error) {
+            logger.error('[Telegram /me] Error processing /me command:', error);
+          }
+        }
       },
     ],
     VOICE_MESSAGE_RECEIVED: [

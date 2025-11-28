@@ -88,6 +88,32 @@ export function deleteSession(sessionId: string): boolean {
 }
 
 /**
+ * Gets user session by Telegram ID
+ * Useful for bot commands to find user by their Telegram ID
+ */
+export function getSessionByTelegramId(telegramId: number): SessionUser | null {
+  for (const session of sessions.values()) {
+    if (session.telegramId === telegramId) {
+      // Check if session expired
+      const now = Date.now();
+      const sessionAge = now - session.lastActivity.getTime();
+      
+      if (sessionAge > SESSION_TIMEOUT_MS) {
+        sessions.delete(session.sessionId);
+        return null;
+      }
+      
+      // Update last activity
+      session.lastActivity = new Date();
+      
+      return session;
+    }
+  }
+  
+  return null;
+}
+
+/**
  * Generates a secure random session ID
  */
 function generateSessionId(): string {

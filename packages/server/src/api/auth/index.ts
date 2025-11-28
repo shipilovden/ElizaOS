@@ -1,7 +1,7 @@
 import express from 'express';
 import { logger } from '@elizaos/core';
 import { validateTelegramAuth, convertToTelegramUser } from './telegram';
-import { createSession, getSessionUser, deleteSession } from '../../middleware/session';
+import { createSession, getSessionUser, deleteSession, getSessionByTelegramId } from '../../middleware/session';
 import type { TelegramAuthData, TelegramUser } from '../../types/telegram';
 
 /**
@@ -16,9 +16,8 @@ export function authRouter(): express.Router {
    */
   router.post('/telegram/login', async (req: express.Request, res: express.Response) => {
     try {
-      // Prefer custom env var to avoid triggering core telegram plugin loading
-      const botToken =
-        process.env.AICHAT_TELEGRAM_BOT_TOKEN || process.env.TELEGRAM_BOT_TOKEN;
+      // Use TELEGRAM_BOT_TOKEN (same token can be used for both web auth and bot)
+      const botToken = process.env.TELEGRAM_BOT_TOKEN;
 
       if (!botToken) {
         logger.error('[Auth] AICHAT_TELEGRAM_BOT_TOKEN / TELEGRAM_BOT_TOKEN not configured');
@@ -74,6 +73,51 @@ export function authRouter(): express.Router {
   });
 
   /**
+   * GET /api/auth/telegram/bot/user-info
+   * Returns user info by Telegram ID (for bot commands)
+   */
+  router.get('/telegram/bot/user-info', (req: express.Request, res: express.Response) => {
+    const telegramId = req.query.telegramId;
+    
+    if (!telegramId) {
+      return res.status(400).json({ 
+        error: 'telegramId query parameter is required' 
+      });
+    }
+    
+    const telegramIdNum = Number.parseInt(telegramId as string, 10);
+    if (Number.isNaN(telegramIdNum)) {
+      return res.status(400).json({ 
+        error: 'Invalid telegramId format' 
+      });
+    }
+    
+    const sessionUser = getSessionByTelegramId(telegramIdNum);
+    
+    if (!sessionUser) {
+      return res.status(404).json({ 
+        error: 'User not found or not logged in' 
+      });
+    }
+    
+    // Return user data
+    const user: TelegramUser = {
+      id: sessionUser.telegramId,
+      firstName: sessionUser.firstName,
+      lastName: sessionUser.lastName,
+      username: sessionUser.username,
+      photoUrl: sessionUser.photoUrl,
+    };
+    
+    res.json({ 
+      user,
+      sessionId: sessionUser.sessionId,
+      createdAt: sessionUser.createdAt,
+      lastActivity: sessionUser.lastActivity,
+    });
+  });
+
+  /**
    * GET /api/auth/me
    * Returns current authenticated user
    */
@@ -116,9 +160,8 @@ export function authRouter(): express.Router {
    */
   router.get('/telegram/callback', async (req: express.Request, res: express.Response) => {
     try {
-      // Prefer custom env var to avoid triggering core telegram plugin loading
-      const botToken =
-        process.env.AICHAT_TELEGRAM_BOT_TOKEN || process.env.TELEGRAM_BOT_TOKEN;
+      // Use TELEGRAM_BOT_TOKEN (same token can be used for both web auth and bot)
+      const botToken = process.env.TELEGRAM_BOT_TOKEN;
 
       if (!botToken) {
         logger.error('[Auth] AICHAT_TELEGRAM_BOT_TOKEN / TELEGRAM_BOT_TOKEN not configured');
