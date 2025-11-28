@@ -396,7 +396,12 @@ export function createApiRouter(
   router.use('/system', systemRouter());
 
   // Mount auth router at /auth - handles authentication (Telegram Web Login)
+  logger.info('[API] Mounting auth router', { 
+    hasDatabase: !!serverInstance.database,
+    databaseType: serverInstance.database ? 'provided' : 'none'
+  });
   router.use('/auth', authRouter(serverInstance.database));
+  logger.info('[API] Auth router mounted at /auth');
 
   // NOTE: /world routes have been removed - functionality moved to messaging/spaces
 
