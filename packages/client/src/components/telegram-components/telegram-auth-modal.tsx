@@ -313,17 +313,54 @@ export default function TelegramAuthModal() {
     localStorage.setItem('telegram-auth-token', authToken);
 
     // Build bot URL - use bot username if available, otherwise use bot ID
-    // Format: https://t.me/bot_username?start=auth_token
-    const botUrl = botUsername.includes('@')
-      ? `https://t.me/${botUsername.replace('@', '')}?start=${authToken}`
-      : /^\d+$/.test(botUsername)
-        ? `https://t.me/${botUsername}?start=${authToken}`
-        : `https://t.me/${botUsername}?start=${authToken}`;
+    // For tg:// protocol: use username for domain, or bot ID for bot parameter
+    const botName = botUsername.includes('@') 
+      ? botUsername.replace('@', '') 
+      : botUsername;
+    
+    // Check if botName is numeric (bot ID) or username
+    const isNumericId = /^\d+$/.test(botName);
+    
+    // Build tg:// URL - different format for username vs ID
+    const tgProtocolUrl = isNumericId
+      ? `tg://resolve?start=${authToken}&bot=${botName}` // For bot ID
+      : `tg://resolve?domain=${botName}&start=${authToken}`; // For username
+    
+    const webUrl = `https://t.me/${botName}?start=${authToken}`;
 
-    clientLogger.info('Opening Telegram bot for authentication', { botUrl, authToken });
+    clientLogger.info('Opening Telegram bot for authentication', { 
+      tgProtocolUrl, 
+      webUrl, 
+      authToken,
+      isNumericId,
+      botName 
+    });
 
-    // Open bot in Telegram (will open in Telegram app or web)
-    window.open(botUrl, '_blank');
+    // Try to open in Telegram app first using tg:// protocol
+    // This will open Telegram desktop/mobile app if installed
+    const link = document.createElement('a');
+    link.href = tgProtocolUrl;
+    link.style.display = 'none';
+    document.body.appendChild(link);
+    
+    // Try clicking the tg:// link
+    link.click();
+    
+    // Remove link immediately
+    setTimeout(() => {
+      document.body.removeChild(link);
+    }, 100);
+    
+    // Fallback: if tg:// doesn't work (user doesn't have Telegram app),
+    // open web version after a short delay
+    // Note: This will open in browser, but user can still interact with bot
+    setTimeout(() => {
+      // Only open web version if we're still processing (tg:// might have failed)
+      if (isProcessingAuth) {
+        clientLogger.info('Opening web fallback for Telegram bot');
+        window.open(webUrl, '_blank');
+      }
+    }, 1000);
 
     // Start polling for session
     setIsProcessingAuth(true);
