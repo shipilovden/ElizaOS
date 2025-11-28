@@ -50,7 +50,7 @@ export function openTelegramOAuthPopup(
       clientLogger.info('OAuth popup closed, checking auth status');
 
       // Wait a bit for callback to complete and store session
-      setTimeout(() => {
+      setTimeout(async () => {
         // Check localStorage for auth success (fallback)
         try {
           const stored = localStorage.getItem('telegram-auth-success');
