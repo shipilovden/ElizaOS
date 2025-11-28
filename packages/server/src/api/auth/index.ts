@@ -11,10 +11,18 @@ import type { TelegramAuthData, TelegramUser } from '../../types/telegram';
 export function authRouter(database?: DatabaseAdapter): express.Router {
   const router = express.Router();
 
+  logger.info('[Auth] Initializing auth router', { hasDatabase: !!database });
+
   // Initialize session storage with database if provided
   if (database) {
     initializeSessionStorage(database);
+    logger.info('[Auth] Session storage initialized with database');
+  } else {
+    logger.warn('[Auth] No database provided, using in-memory session storage');
   }
+
+  // Log all registered routes for debugging
+  logger.info('[Auth] Registering routes: /telegram/login, /telegram/check, /telegram/bot/login, /telegram/bot/user-info, /me, /logout');
 
   /**
    * POST /api/auth/telegram/login
@@ -354,36 +362,55 @@ export function authRouter(database?: DatabaseAdapter): express.Router {
    * Used for polling from client when user authenticates via bot
    */
   router.get('/telegram/check', async (req: express.Request, res: express.Response) => {
+    logger.info('[Auth] GET /telegram/check called', { 
+      token: req.query.token ? 'present' : 'missing',
+      query: req.query 
+    });
+
     const token = req.query.token as string;
 
     if (!token) {
+      logger.warn('[Auth] /telegram/check called without token');
       return res.status(400).json({
         error: 'Token is required'
       });
     }
 
-    // Find session by auth token
-    const session = await getSessionByAuthToken(token);
+    try {
+      // Find session by auth token
+      const session = await getSessionByAuthToken(token);
 
-    if (session) {
-      const user: TelegramUser = {
-        id: session.telegramId,
-        firstName: session.firstName,
-        lastName: session.lastName,
-        username: session.username,
-        photoUrl: session.photoUrl,
-      };
+      if (session) {
+        logger.info('[Auth] Session found for token', { 
+          telegramId: session.telegramId,
+          sessionId: session.sessionId 
+        });
 
+        const user: TelegramUser = {
+          id: session.telegramId,
+          firstName: session.firstName,
+          lastName: session.lastName,
+          username: session.username,
+          photoUrl: session.photoUrl,
+        };
+
+        return res.json({
+          authenticated: true,
+          user,
+          sessionId: session.sessionId,
+        });
+      }
+
+      logger.debug('[Auth] No session found for token', { token: token.substring(0, 10) + '...' });
       return res.json({
-        authenticated: true,
-        user,
-        sessionId: session.sessionId,
+        authenticated: false,
+      });
+    } catch (error) {
+      logger.error('[Auth] Error checking session by token:', error);
+      return res.status(500).json({
+        error: 'Internal server error'
       });
     }
-
-    return res.json({
-      authenticated: false,
-    });
   });
 
   /**
