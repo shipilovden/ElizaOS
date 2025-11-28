@@ -14,8 +14,9 @@ services:
       curl -fsSL https://bun.sh/install | bash
       export PATH="$HOME/.bun/bin:$PATH"
       bun --version
+      # Install dependencies first (ensures node_modules/@elizaos/server exists)
       bun install
-      # Build client using script
+      # Build client using script (after dependencies are installed)
       if [ -f "build-client.sh" ]; then
         chmod +x build-client.sh
         ./build-client.sh
