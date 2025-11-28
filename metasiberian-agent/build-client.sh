@@ -46,7 +46,14 @@ bun install
 cd ../../metasiberian-agent
 
 # Build client using vite directly (skip type checking for faster build)
+# Export VITE_ environment variables so they're available during build
 cd ../packages/client
+# Vite automatically picks up VITE_* env vars, but ensure they're exported
+export VITE_TELEGRAM_BOT_ID="${VITE_TELEGRAM_BOT_ID}"
+export VITE_TELEGRAM_BOT_USERNAME="${VITE_TELEGRAM_BOT_USERNAME}"
+echo "Building client with VITE env vars:"
+echo "  VITE_TELEGRAM_BOT_ID=${VITE_TELEGRAM_BOT_ID:-not set}"
+echo "  VITE_TELEGRAM_BOT_USERNAME=${VITE_TELEGRAM_BOT_USERNAME:-not set}"
 bunx vite build
 cd ../../metasiberian-agent
 
