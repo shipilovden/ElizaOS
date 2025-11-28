@@ -200,6 +200,17 @@ const plugin: Plugin = {
       for (const [key, value] of Object.entries(validatedConfig)) {
         if (value) process.env[key] = value;
       }
+
+      // Register Telegram bot commands if token is available
+      const telegramToken = process.env.TELEGRAM_BOT_TOKEN;
+      if (telegramToken) {
+        try {
+          await this.registerTelegramCommands(telegramToken);
+        } catch (error) {
+          logger.warn('Failed to register Telegram commands:', error);
+          // Don't fail plugin initialization if command registration fails
+        }
+      }
     } catch (error) {
       if (error instanceof z.ZodError) {
         const errorMessages =
@@ -209,6 +220,52 @@ const plugin: Plugin = {
       throw new Error(
         `Invalid plugin configuration: ${error instanceof Error ? error.message : String(error)}`
       );
+    }
+  },
+  /**
+   * Registers Telegram bot commands using setMyCommands API
+   * This makes commands appear in the Telegram command menu when user types "/"
+   * 
+   * @param token - Telegram bot token
+   */
+  async registerTelegramCommands(token: string): Promise<void> {
+    const commands = [
+      {
+        command: 'me',
+        description: 'Показать информацию о вашем профиле (требуется авторизация на сайте)',
+      },
+    ];
+
+    const apiUrl = `https://api.telegram.org/bot${token}/setMyCommands`;
+    
+    try {
+      const response = await fetch(apiUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          commands: commands,
+          // Optional: set scope and language_code if needed
+          // scope: { type: 'default' },
+          // language_code: 'ru',
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(`Telegram API error: ${response.status} - ${JSON.stringify(errorData)}`);
+      }
+
+      const result = await response.json();
+      if (result.ok) {
+        logger.info('Telegram bot commands registered successfully', { commands });
+      } else {
+        throw new Error(`Telegram API returned error: ${JSON.stringify(result)}`);
+      }
+    } catch (error) {
+      logger.error('Error registering Telegram commands:', error);
+      throw error;
     }
   },
   models: {
