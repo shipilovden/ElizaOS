@@ -77,4 +77,10 @@ services:
         generateValue: true  # Генерируется автоматически Render
       - key: ELIZA_SERVER_AUTH_TOKEN
         sync: false  # Установите вручную в Dashboard для безопасности
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false  # Установите вручную в Dashboard (токен от BotFather)
+      - key: VITE_TELEGRAM_BOT_ID
+        sync: false  # Установите вручную в Dashboard (ID бота, например: 8581479820)
+      - key: VITE_TELEGRAM_BOT_USERNAME
+        sync: false  # Установите вручную в Dashboard (username бота, опционально)
 
