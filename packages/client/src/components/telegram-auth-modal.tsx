@@ -17,7 +17,7 @@ import { LogIn } from 'lucide-react';
  * Shows a modal dialog requiring Telegram authentication before accessing the site
  */
 export default function TelegramAuthModal() {
-  const { isAuthenticated, isLoading, setUser, checkAuth } = useAuth();
+  const { isAuthenticated, isLoading, setUser, checkAuth, telegramUser } = useAuth();
   const widgetContainerRef = useRef<HTMLDivElement>(null);
   const scriptLoadedRef = useRef(false);
   const [botUsername, setBotUsername] = useState<string | null>(null);
@@ -25,12 +25,12 @@ export default function TelegramAuthModal() {
   const [widgetReady, setWidgetReady] = useState(false);
   const [showFallback, setShowFallback] = useState(false);
   const [isProcessingAuth, setIsProcessingAuth] = useState(false);
+  const [authCompleted, setAuthCompleted] = useState(false); // Track if first auth completed
 
   // Modal should be open if:
   // 1. Not loading
-  // 2. Not authenticated OR currently processing authentication
-  // This ensures modal stays open during OAuth flow
-  const isOpen = !isLoading && (!isAuthenticated || isProcessingAuth);
+  // 2. Not authenticated (widget will show button with name after first auth, user clicks to close)
+  const isOpen = !isLoading && !isAuthenticated;
 
   useEffect(() => {
     if (!isOpen) return;
@@ -165,29 +165,95 @@ export default function TelegramAuthModal() {
       scriptLoadedRef.current = true;
     }
 
-    // Create widget in container
-    if (widgetContainerRef.current && botUsername) {
-      const container = widgetContainerRef.current;
-      container.innerHTML = '';
+      // Create global callback function for Telegram widget
+      // According to Telegram docs, widget calls this function with user data
+      // This is called TWICE: 
+      // 1. First time when user authorizes in Telegram (we create session)
+      // 2. Second time when user clicks button with their name (we close modal)
+      (window as any).onTelegramAuth = async (user: any) => {
+        clientLogger.info('Telegram widget callback received', { 
+          userId: user.id, 
+          firstName: user.first_name,
+          authCompleted,
+          isAuthenticated 
+        });
+        
+        // If auth already completed, this is second call - user clicked button with name
+        if (authCompleted && telegramUser) {
+          clientLogger.info('User clicked widget button with name - closing modal');
+          // Modal will close because isAuthenticated is true
+          return;
+        }
+        
+        try {
+          setIsProcessingAuth(true);
+          
+          // Convert Telegram widget format to our format
+          const authData = {
+            id: user.id,
+            first_name: user.first_name,
+            last_name: user.last_name,
+            username: user.username,
+            photo_url: user.photo_url,
+            auth_date: user.auth_date,
+            hash: user.hash,
+          };
+          
+          // Send to server for validation and session creation
+          const client = await import('@/lib/api-client-config').then(m => m.getElizaClient());
+          const response = await fetch(`${client.config.baseUrl}/api/auth/telegram/login`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(authData),
+          });
+          
+          if (!response.ok) {
+            throw new Error('Authentication failed');
+          }
+          
+          const data = await response.json();
+          clientLogger.info('Telegram login successful', { userId: data.user.id });
+          
+          // Update auth context
+          setUser(data.user, data.sessionId);
+          setError(null);
+          setAuthCompleted(true); // Mark first auth as completed
+          
+          // Widget will automatically change button to "Login as [Name]" 
+          // User needs to click that button to close modal
+          setIsProcessingAuth(false);
+          clientLogger.info('User authorized, widget will show button with name. Waiting for user to click it.');
+        } catch (error) {
+          clientLogger.error('Telegram login error:', error);
+          setError('Authentication failed. Please try again.');
+          setIsProcessingAuth(false);
+        }
+      };
       
-      // Wait for script to load, then create widget
-      // According to Telegram docs: https://core.telegram.org/widgets/login
-      // Widget should be created as a script tag with data attributes
-      const createWidget = () => {
-        if (!container.querySelector('script[data-telegram-login]')) {
-          clientLogger.info('Creating Telegram widget', { botUsername, authUrl });
-          
-          // Create script tag exactly as per Telegram documentation
-          const widgetScript = document.createElement('script');
-          widgetScript.async = true;
-          widgetScript.src = 'https://telegram.org/js/telegram-widget.js?22';
-          
-          // Set attributes as per Telegram docs
-          widgetScript.setAttribute('data-telegram-login', botUsername);
-          widgetScript.setAttribute('data-size', 'large');
-          widgetScript.setAttribute('data-auth-url', authUrl);
-          widgetScript.setAttribute('data-request-access', 'write');
-          widgetScript.setAttribute('data-userpic', 'true');
+      // Create widget in container
+      if (widgetContainerRef.current && botUsername) {
+        const container = widgetContainerRef.current;
+        container.innerHTML = '';
+        
+        // Wait for script to load, then create widget
+        // According to Telegram docs: https://core.telegram.org/widgets/login
+        // Widget should be created as a script tag with data attributes
+        const createWidget = () => {
+          if (!container.querySelector('script[data-telegram-login]')) {
+            clientLogger.info('Creating Telegram widget with onauth callback', { botUsername });
+            
+            // Create script tag exactly as per Telegram documentation
+            const widgetScript = document.createElement('script');
+            widgetScript.async = true;
+            widgetScript.src = 'https://telegram.org/js/telegram-widget.js?22';
+            
+            // Set attributes as per Telegram docs - use onauth callback instead of auth-url
+            widgetScript.setAttribute('data-telegram-login', botUsername);
+            widgetScript.setAttribute('data-size', 'large');
+            widgetScript.setAttribute('data-onauth', 'onTelegramAuth(user)');
+            widgetScript.setAttribute('data-request-access', 'write');
           
           widgetScript.onload = () => {
             clientLogger.info('Telegram widget script loaded successfully');
@@ -219,7 +285,7 @@ export default function TelegramAuthModal() {
             attributes: {
               'data-telegram-login': botUsername,
               'data-size': 'large',
-              'data-auth-url': authUrl,
+              'data-onauth': 'onTelegramAuth(user)',
             }
           });
           
@@ -279,6 +345,9 @@ export default function TelegramAuthModal() {
 
     return () => {
       window.removeEventListener('message', handleMessage);
+      clearInterval(checkLocalStorage);
+      // Cleanup global callback
+      delete (window as any).onTelegramAuth;
     };
   }, [isOpen, botUsername, setUser]);
 
@@ -497,9 +566,8 @@ export default function TelegramAuthModal() {
                     widgetScript.src = 'https://telegram.org/js/telegram-widget.js?22';
                     widgetScript.setAttribute('data-telegram-login', botUsername);
                     widgetScript.setAttribute('data-size', 'large');
-                    widgetScript.setAttribute('data-auth-url', authUrl);
+                    widgetScript.setAttribute('data-onauth', 'onTelegramAuth(user)');
                     widgetScript.setAttribute('data-request-access', 'write');
-                    widgetScript.setAttribute('data-userpic', 'true');
                     container.appendChild(widgetScript);
                     
                     // Check again after delay
