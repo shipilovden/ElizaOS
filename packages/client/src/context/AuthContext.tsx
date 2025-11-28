@@ -26,6 +26,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [telegramUser, setTelegramUser] = useState<TelegramUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
+  // Define setUser first, before using it in useEffect
+  const setUser = useCallback((user: TelegramUser, sessionId: string) => {
+    setUserDirectly(user, sessionId);
+    setTelegramUser(user);
+    clientLogger.info('User set in context', { userId: user.id });
+  }, []);
+
   // Define checkAuth first, before using it in useEffect
   const checkAuth = useCallback(async () => {
     try {
@@ -153,12 +160,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       clientLogger.error('Login error:', error);
       throw error;
     }
-  }, []);
-
-  const setUser = useCallback((user: TelegramUser, sessionId: string) => {
-    setUserDirectly(user, sessionId);
-    setTelegramUser(user);
-    clientLogger.info('User set in context', { userId: user.id });
   }, []);
 
   const logout = useCallback(async () => {
