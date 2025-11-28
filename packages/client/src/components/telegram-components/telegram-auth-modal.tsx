@@ -10,6 +10,7 @@ import {
 } from '../ui/dialog';
 import { Button } from '../ui/button';
 import { LogIn, RefreshCcw } from 'lucide-react';
+import type { TelegramUser } from '@/types/telegram';
 import { createTelegramAuthCallback } from './telegram-auth-callback';
 import { loadTelegramWidgetScript, createTelegramWidgetAsync } from './telegram-widget';
 import { openTelegramOAuthPopup, handleOAuthMessage } from './telegram-oauth-handler';
@@ -66,10 +67,10 @@ export default function TelegramAuthModal() {
     clientLogger.info('Telegram auth modal: configured', { botIdentifier, usingBotId: !!botId });
 
     // Setup OAuth message handler
-    const handleMessage = (event: MessageEvent) => {
+    const handleMessage = async (event: MessageEvent) => {
       clientLogger.info('Received postMessage', { origin: event.origin, data: event.data });
-      handleOAuthMessage(event, {
-        onAuthSuccess: async (user, sessionId) => {
+      await handleOAuthMessage(event, {
+        onAuthSuccess: async (user: TelegramUser, sessionId: string): Promise<void> => {
           try {
             setIsProcessingAuth(true);
             clientLogger.info('OAuth message indicates success, setting user and verifying with server', { user });
@@ -88,7 +89,7 @@ export default function TelegramAuthModal() {
             setIsProcessingAuth(false);
           }
         },
-        onAuthError: (errorMsg) => {
+        onAuthError: (errorMsg: string) => {
           setError(errorMsg);
           setIsProcessingAuth(false);
         },
@@ -170,7 +171,7 @@ export default function TelegramAuthModal() {
           setIsProcessingAuth(false);
         }
       },
-      onAuthError: (errorMsg) => {
+      onAuthError: (errorMsg: string) => {
         setError(errorMsg);
         setIsProcessingAuth(false);
       },
@@ -256,34 +257,45 @@ export default function TelegramAuthModal() {
       setIsProcessingAuth(true);
       setError(null);
       openTelegramOAuthPopup(botUsername, {
-        onAuthSuccess: (user, sessionId) => {
+        onAuthSuccess: async (user: TelegramUser, sessionId: string): Promise<void> => {
           setUser(user, sessionId);
           setError(null);
-          setAuthCompleted(true);
-          setIsProcessingAuth(false);
-          clientLogger.info('User authenticated via OAuth popup, recreating widget to show button with name');
+          setIsProcessingAuth(true);
+          clientLogger.info('OAuth popup: user received, validating session on server', { user });
 
-          // Recreate widget - it will now show button with user name
-          setTimeout(() => {
-            const container = widgetContainerRef.current;
-            if (container && botUsername) {
-              container.innerHTML = '';
-              createTelegramWidgetAsync(container, {
-                botUsername,
-                onReady: () => {
-                  setWidgetReady(true);
-                  setShowFallback(false);
-                  clientLogger.info('Widget recreated after OAuth, should show button with user name');
-                },
-                onError: (err) => {
-                  clientLogger.error('Failed to recreate widget after OAuth', err);
-                  setShowFallback(true);
-                },
-              });
-            }
-          }, 500);
+          try {
+            // wait for server-side validation / session creation
+            await checkAuth();
+            setAuthCompleted(true);
+            clientLogger.info('Server confirmed session after OAuth popup; recreating widget to show user name/avatar');
+
+            // Recreate widget - it will now show button with user name
+            setTimeout(() => {
+              const container = widgetContainerRef.current;
+              if (container && botUsername) {
+                container.innerHTML = '';
+                createTelegramWidgetAsync(container, {
+                  botUsername,
+                  onReady: () => {
+                    setWidgetReady(true);
+                    setShowFallback(false);
+                    clientLogger.info('Widget recreated after OAuth, should show button with user name');
+                  },
+                  onError: (err) => {
+                    clientLogger.error('Failed to recreate widget after OAuth', err);
+                    setShowFallback(true);
+                  },
+                });
+              }
+            }, 300);
+          } catch (e) {
+            clientLogger.error('checkAuth failed after OAuth popup', e);
+            setError('Authentication verification failed. Please try again.');
+          } finally {
+            setIsProcessingAuth(false);
+          }
         },
-        onAuthError: (errorMsg) => {
+        onAuthError: (errorMsg: string) => {
           setError(errorMsg);
           setIsProcessingAuth(false);
         },
