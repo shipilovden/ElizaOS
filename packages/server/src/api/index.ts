@@ -367,7 +367,16 @@ export function createApiRouter(
   // Additional security middleware
   router.use(securityMiddleware());
 
-  // Mount media router at /media FIRST - handles file uploads without middleware interference
+  // Mount auth router FIRST - handles authentication (Telegram Web Login)
+  // This should be early to avoid middleware conflicts
+  logger.info('[API] Mounting auth router', { 
+    hasDatabase: !!serverInstance.database,
+    databaseType: serverInstance.database ? 'provided' : 'none'
+  });
+  router.use('/auth', authRouter(serverInstance.database));
+  logger.info('[API] Auth router mounted at /auth');
+
+  // Mount media router at /media - handles file uploads without middleware interference
   router.use('/media', mediaRouter());
 
   // Content type validation for write operations (applied after media routes)
@@ -394,14 +403,6 @@ export function createApiRouter(
 
   // Mount system router at /system - handles system configuration, health checks, and environment
   router.use('/system', systemRouter());
-
-  // Mount auth router at /auth - handles authentication (Telegram Web Login)
-  logger.info('[API] Mounting auth router', { 
-    hasDatabase: !!serverInstance.database,
-    databaseType: serverInstance.database ? 'provided' : 'none'
-  });
-  router.use('/auth', authRouter(serverInstance.database));
-  logger.info('[API] Auth router mounted at /auth');
 
   // NOTE: /world routes have been removed - functionality moved to messaging/spaces
 
